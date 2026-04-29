@@ -36,7 +36,29 @@ DOWNLOAD_DIR = os.path.join(BASE_DIR, "temp_downloads")
 COOKIES_FILE = os.path.join(BASE_DIR, "cookies.txt")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-def get_ydl_opts(download=False, extra_opts=None):
+def get_available_browsers():
+    """Detect which browsers are installed and have user data on Windows."""
+    browsers = []
+    local_app_data = os.environ.get('LOCALAPPDATA', '')
+    app_data = os.environ.get('APPDATA', '')
+    
+    mapping = {
+        'chrome': os.path.join(local_app_data, 'Google', 'Chrome', 'User Data'),
+        'edge': os.path.join(local_app_data, 'Microsoft', 'Edge', 'User Data'),
+        'brave': os.path.join(local_app_data, 'BraveSoftware', 'Brave-Browser', 'User Data'),
+        'vivaldi': os.path.join(local_app_data, 'Vivaldi', 'User Data'),
+        'firefox': os.path.join(app_data, 'Mozilla', 'Firefox', 'Profiles'),
+    }
+    
+    for b, path in mapping.items():
+        if os.path.exists(path):
+            browsers.append(b)
+    
+    # Priority order for trying browsers
+    priority = ['chrome', 'edge', 'brave', 'vivaldi', 'firefox']
+    return sorted(browsers, key=lambda x: priority.index(x) if x in priority else 99)
+
+def get_ydl_opts(download=False, extra_opts=None, browser=None):
     opts = {
         'logger': yt_logger,
         'no_warnings': True,
@@ -49,30 +71,10 @@ def get_ydl_opts(download=False, extra_opts=None):
     }
     
     if os.path.exists(COOKIES_FILE):
-        app_logger.info(f"Using cookies from file: {COOKIES_FILE}")
         opts['cookiefile'] = COOKIES_FILE
-    else:
-        # Since the user is on Windows, try to pull cookies from local browsers as a fallback
-        app_logger.info("cookies.txt not found. Attempting to pull cookies from local browser...")
+    elif browser:
+        opts['cookiesfrombrowser'] = (browser,)
         
-        # We try to pick the most likely available browser. 
-        # Note: yt-dlp's 'cookiesfrombrowser' expects a tuple (browser_name, profile, keyring, container).
-        # If we pass just a string 'chrome', yt-dlp might unpack it into 'c','h','r','o','m','e' (6 chars)
-        # leading to the "takes from 1 to 4 positional arguments but 6 were given" error.
-        # So we MUST pass it as a tuple.
-        browser = 'chrome'
-        local_app_data = os.environ.get('LOCALAPPDATA', '')
-        app_data = os.environ.get('APPDATA', '')
-        
-        if not os.path.exists(os.path.join(local_app_data, 'Google', 'Chrome', 'User Data')):
-            if os.path.exists(os.path.join(local_app_data, 'Microsoft', 'Edge', 'User Data')):
-                browser = 'edge'
-            elif os.path.exists(os.path.join(app_data, 'Mozilla', 'Firefox', 'Profiles')):
-                browser = 'firefox'
-        
-        app_logger.info(f"Auto-selected browser for cookies: {browser}")
-        opts['cookiesfrombrowser'] = (browser,) # Use a tuple to avoid string unpacking issues
-    
     if extra_opts:
         opts.update(extra_opts)
         
@@ -111,26 +113,40 @@ async def health():
 async def get_video_info(data: VideoURL):
     app_logger.info(f"Fetching info for URL: {data.url}")
     
-    ydl_opts = get_ydl_opts(extra_opts={'extract_flat': 'in_playlist'})
-    
+    # 1. Try with cookies from various browsers sequentially
+    browsers = get_available_browsers()
+    for browser in browsers:
+        try:
+            app_logger.info(f"Trying to fetch info using cookies from {browser}...")
+            ydl_opts = get_ydl_opts(extra_opts={'extract_flat': 'in_playlist'}, browser=browser)
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(data.url, download=False)
+                return process_info(info, data.url)
+        except Exception as e:
+            app_logger.warning(f"Failed with {browser} cookies: {str(e)}")
+            continue
+
+    # 2. Try with cookies.txt if it exists
+    if os.path.exists(COOKIES_FILE):
+        try:
+            app_logger.info("Trying to fetch info using cookies.txt...")
+            ydl_opts = get_ydl_opts(extra_opts={'extract_flat': 'in_playlist'})
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(data.url, download=False)
+                return process_info(info, data.url)
+        except Exception as e:
+            app_logger.warning(f"Failed with cookies.txt: {str(e)}")
+
+    # 3. Final Fallback: Try without cookies
+    app_logger.info("Attempting final fallback without cookies...")
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl_opts_no_cookies = get_ydl_opts(extra_opts={'extract_flat': 'in_playlist'})
+        with yt_dlp.YoutubeDL(ydl_opts_no_cookies) as ydl:
             info = ydl.extract_info(data.url, download=False)
             return process_info(info, data.url)
     except Exception as e:
-        app_logger.warning(f"Error fetching info with cookies for {data.url}: {str(e)}. Retrying without cookies...")
-        # Fallback: Try without cookies
-        try:
-            ydl_opts_no_cookies = get_ydl_opts(extra_opts={'extract_flat': 'in_playlist'})
-            ydl_opts_no_cookies.pop('cookiesfrombrowser', None)
-            ydl_opts_no_cookies.pop('cookiefile', None)
-            
-            with yt_dlp.YoutubeDL(ydl_opts_no_cookies) as ydl:
-                info = ydl.extract_info(data.url, download=False)
-                return process_info(info, data.url)
-        except Exception as e2:
-            app_logger.error(f"Error fetching info without cookies for {data.url}: {str(e2)}")
-            raise HTTPException(status_code=400, detail=str(e2))
+        app_logger.error(f"All extraction attempts failed for {data.url}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 def process_info(info, url):
     if not info:
