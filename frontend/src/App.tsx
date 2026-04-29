@@ -4,6 +4,18 @@ import type { VideoMetadata, DownloadHistoryEntry, VideoItem } from './types';
 
 const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:8000' : '';
 
+// Helper to get or create a persistent visitor ID
+const getVisitorId = () => {
+  let id = localStorage.getItem('visitorId');
+  if (!id) {
+    id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('visitorId', id);
+  }
+  return id;
+};
+
+const visitorId = getVisitorId();
+
 function App() {
   const [urlInput, setUrlInput] = useState('');
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -22,7 +34,9 @@ function App() {
 
   const fetchHistory = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/history`);
+      const response = await fetch(`${API_BASE_URL}/api/history`, {
+        headers: { 'X-Visitor-Id': visitorId }
+      });
       if (response.ok) {
         const data = await response.json();
         setHistory(data);
@@ -101,7 +115,7 @@ function App() {
     if (!video.selectedFormatId || !video.metadata) return;
     
     const noAudio = video.activeTab === 'video_only';
-    const downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(video.url)}&format_id=${video.selectedFormatId}${noAudio ? '&no_audio=true' : ''}`;
+    const downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(video.url)}&format_id=${video.selectedFormatId}&visitor_id=${visitorId}${noAudio ? '&no_audio=true' : ''}`;
     
     const link = document.createElement('a');
     link.href = downloadUrl;
@@ -145,7 +159,10 @@ function App() {
   const clearHistory = async () => {
     if (!window.confirm('Are you sure you want to clear your download history?')) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/history`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/api/history`, { 
+        method: 'DELETE',
+        headers: { 'X-Visitor-Id': visitorId }
+      });
       if (response.ok) {
         setHistory([]);
       }

@@ -2,8 +2,8 @@ import os
 import uuid
 import shutil
 import asyncio
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from typing import List, Optional, Annotated
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -109,13 +109,14 @@ async def download_video(
     background_tasks: BackgroundTasks,
     url: str = Query(...),
     format_id: str = Query(...),
+    visitor_id: str = Query(...),
     no_audio: bool = Query(False)
 ):
     job_id = str(uuid.uuid4())
-    app_logger.info(f"Starting download job {job_id} for URL: {url} (Format: {format_id}, No Audio: {no_audio})")
+    app_logger.info(f"Starting download job {job_id} for URL: {url} (Format: {format_id}, No Audio: {no_audio}, Visitor: {visitor_id})")
     
     # Record in history
-    add_download(job_id, url, format_id=format_id, status='started')
+    add_download(job_id, url, visitor_id, format_id=format_id, status='started')
     
     job_dir = os.path.join(DOWNLOAD_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
@@ -162,18 +163,22 @@ async def download_video(
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/history")
-async def get_download_history():
+async def get_download_history(x_visitor_id: Annotated[Optional[str], Header()] = None):
+    if not x_visitor_id:
+        return []
     try:
-        history = get_history()
+        history = get_history(x_visitor_id)
         return history
     except Exception as e:
         app_logger.error(f"Error fetching history: {str(e)}")
         raise HTTPException(status_code=500, detail="Could not fetch history")
 
 @app.delete("/api/history")
-async def delete_download_history():
+async def delete_download_history(x_visitor_id: Annotated[Optional[str], Header()] = None):
+    if not x_visitor_id:
+        raise HTTPException(status_code=400, detail="Visitor ID required")
     try:
-        clear_history()
+        clear_history(x_visitor_id)
         return {"message": "History cleared"}
     except Exception as e:
         app_logger.error(f"Error clearing history: {str(e)}")

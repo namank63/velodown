@@ -20,19 +20,27 @@ def init_db():
             format_id TEXT,
             status TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            file_path TEXT
+            file_path TEXT,
+            visitor_id TEXT
         )
     ''')
+    
+    # Migration: Add visitor_id if it doesn't exist (for existing history.db)
+    try:
+        cursor.execute('ALTER TABLE downloads ADD COLUMN visitor_id TEXT')
+    except sqlite3.OperationalError:
+        pass # Already exists
+        
     conn.commit()
     conn.close()
 
-def add_download(job_id, url, title=None, format_id=None, status='started'):
+def add_download(job_id, url, visitor_id, title=None, format_id=None, status='started'):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO downloads (id, url, title, format_id, status)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (job_id, url, title, format_id, status))
+        INSERT INTO downloads (id, url, visitor_id, title, format_id, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (job_id, url, visitor_id, title, format_id, status))
     conn.commit()
     conn.close()
 
@@ -50,18 +58,18 @@ def update_download_status(job_id, status, title=None, file_path=None):
     conn.commit()
     conn.close()
 
-def get_history(limit=20):
+def get_history(visitor_id, limit=20):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM downloads ORDER BY timestamp DESC LIMIT ?', (limit,))
+    cursor.execute('SELECT * FROM downloads WHERE visitor_id = ? ORDER BY timestamp DESC LIMIT ?', (visitor_id, limit))
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
-def clear_history():
+def clear_history(visitor_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM downloads')
+    cursor.execute('DELETE FROM downloads WHERE visitor_id = ?', (visitor_id,))
     conn.commit()
     conn.close()
 
