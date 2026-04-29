@@ -96,7 +96,7 @@ class PlaylistEntry(BaseModel):
 
 class VideoMetadata(BaseModel):
     title: str
-    duration: Optional[int] = None
+    duration: Optional[float] = None
     thumbnail: Optional[str] = None
     formats: List[FormatInfo]
     url: str

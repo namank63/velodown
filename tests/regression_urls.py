@@ -6,6 +6,7 @@ TEST_CASES = [
     ("https://youtu.be/RTZW6Mh48eM?si=OI0DcsodDwBexPpV", "Samay Raina"),
     ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "Rick Astley"), # Standard YouTube
     ("https://vimeo.com/22439234", "The Mountain"), # Vimeo
+    ("https://www.instagram.com/reel/DXrA2idCgrT/?igsh=ZXplaG02ZGxlbHZn", "ws_propertiespk"), # Instagram Reel
 ]
 
 BASE_URL = "http://localhost:8000"
