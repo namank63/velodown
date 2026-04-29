@@ -185,21 +185,14 @@ function App() {
       
       const data: VideoMetadata = await response.json();
       
-      // Auto-select best format
-      const bestFormat = data.formats
-        .filter(f => f.vcodec !== 'none' || f.acodec !== 'none')
-        .sort((a, b) => {
-          const resA = parseInt(a.resolution?.split('x')[0] || '0');
-          const resB = parseInt(b.resolution?.split('x')[0] || '0');
-          if (resB !== resA) return resB - resA;
-          return (b.filesize || 0) - (a.filesize || 0);
-        })[0];
+      // Auto-select best format using helper
+      const bestFormatId = getBestFormatId(data.formats, 'video');
 
       setVideos(prev => prev.map(v => v.id === id ? {
         ...v,
         loading: false,
         metadata: data,
-        selectedFormatId: bestFormat?.format_id || null
+        selectedFormatId: bestFormatId
       } : v));
     } catch (err: any) {
       setVideos(prev => prev.map(v => v.id === id ? {
@@ -335,8 +328,31 @@ function App() {
     navigator.clipboard.writeText(text);
   };
 
+  const getBestFormatId = (formats: any[], tab: string) => {
+    return formats
+      .filter(f => {
+        if (tab === 'audio') return f.vcodec === 'none';
+        return f.vcodec !== 'none';
+      })
+      .sort((a, b) => {
+        const resA = parseInt(a.resolution?.split('x')[0] || '0');
+        const resB = parseInt(b.resolution?.split('x')[0] || '0');
+        if (resB !== resA) return resB - resA;
+        return (b.filesize || 0) - (a.filesize || 0);
+      })[0]?.format_id || null;
+  };
+
   const setTab = (videoId: string, tab: VideoItem['activeTab']) => {
-    setVideos(prev => prev.map(v => v.id === videoId ? { ...v, activeTab: tab, selectedFormatId: null } : v));
+    setVideos(prev => prev.map(v => {
+      if (v.id === videoId && v.metadata) {
+        return { 
+          ...v, 
+          activeTab: tab, 
+          selectedFormatId: getBestFormatId(v.metadata.formats, tab) 
+        };
+      }
+      return v.id === videoId ? { ...v, activeTab: tab, selectedFormatId: null } : v;
+    }));
   };
 
   return (
@@ -589,7 +605,7 @@ function App() {
       )}
       
       <footer className={styles.footer}>
-        v1.0.1 • Build: 2026-04-29 18:19:40
+        v1.0.2 • Build: 2026-04-29 18:31:00
       </footer>
     </div>
   );

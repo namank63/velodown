@@ -48,3 +48,11 @@ OmniGrab is a high-performance media acquisition suite leveraging `yt-dlp`.
   - `src/App.module.css`: Scoped component styling.
   - `src/global.css`: Global variables and mesh background.
 - `To-Do.txt`: Source of truth for active development tasks.
+
+## 🚀 Versioning & Deployment Mandate
+
+**For every code modification turn that involves a commit or push:**
+1.  Locate the build version indicator in `frontend/src/App.tsx` (found in the `<footer>` tag).
+2.  Increment the version number (e.g., `v1.0.1` -> `v1.0.2`).
+3.  Update the "Build" timestamp with the current date and time in `YYYY-MM-DD HH:MM:SS` format.
+4.  Ensure the change is built (`npm run build`) before pushing.
