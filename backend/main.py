@@ -2,6 +2,7 @@ import os
 import uuid
 import shutil
 import asyncio
+import random
 from datetime import datetime
 from typing import List, Optional, Annotated
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Header, UploadFile, File
@@ -60,15 +61,24 @@ def get_available_browsers():
     return sorted(browsers, key=lambda x: priority.index(x) if x in priority else 99)
 
 def get_ydl_opts(download=False, extra_opts=None, browser=None):
+    # Rotating mobile user agents to look like different devices
+    user_agents = [
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.179 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; Samsung Galaxy S24 Ultra) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.179 Mobile Safari/537.36'
+    ]
+    
     opts = {
         'logger': yt_logger,
         'no_warnings': True,
         'quiet': True,
-        # A more specific User-Agent that matches what yt-dlp might expect for certain extractors
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'user_agent': random.choice(user_agents),
         'nocheckcertificate': True,
         'ignoreerrors': False,
         'logtostderr': False,
+        # Explicitly tell yt-dlp to use the system's JS runtime (Node.js) for signature challenges
+        'javascript_runtime': 'node', 
     }
     
     if os.path.exists(COOKIES_FILE):

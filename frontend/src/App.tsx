@@ -605,7 +605,7 @@ function App() {
       )}
       
       <footer className={styles.footer}>
-        v1.0.2 • Build: 2026-04-29 18:31:00
+        v1.0.3 • Build: 2026-04-29 18:45:10
       </footer>
     </div>
   );
