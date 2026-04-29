@@ -53,10 +53,25 @@ def get_ydl_opts(download=False, extra_opts=None):
         opts['cookiefile'] = COOKIES_FILE
     else:
         # Since the user is on Windows, try to pull cookies from local browsers as a fallback
-        app_logger.info("cookies.txt not found. Attempting to pull cookies from local browser (Chrome/Edge/Firefox)...")
-        # We try to use cookies from common browsers. yt-dlp handles the existence check internally.
-        # This is very effective for local Windows setups.
-        opts['cookiesfrombrowser'] = ('chrome', 'edge', 'firefox', 'brave', 'vivaldi')
+        app_logger.info("cookies.txt not found. Attempting to pull cookies from local browser...")
+        
+        # We try to pick the most likely available browser. 
+        # Note: yt-dlp's 'cookiesfrombrowser' expects a tuple (browser_name, profile, keyring, container).
+        # If we pass just a string 'chrome', yt-dlp might unpack it into 'c','h','r','o','m','e' (6 chars)
+        # leading to the "takes from 1 to 4 positional arguments but 6 were given" error.
+        # So we MUST pass it as a tuple.
+        browser = 'chrome'
+        local_app_data = os.environ.get('LOCALAPPDATA', '')
+        app_data = os.environ.get('APPDATA', '')
+        
+        if not os.path.exists(os.path.join(local_app_data, 'Google', 'Chrome', 'User Data')):
+            if os.path.exists(os.path.join(local_app_data, 'Microsoft', 'Edge', 'User Data')):
+                browser = 'edge'
+            elif os.path.exists(os.path.join(app_data, 'Mozilla', 'Firefox', 'Profiles')):
+                browser = 'firefox'
+        
+        app_logger.info(f"Auto-selected browser for cookies: {browser}")
+        opts['cookiesfrombrowser'] = (browser,) # Use a tuple to avoid string unpacking issues
     
     if extra_opts:
         opts.update(extra_opts)
@@ -101,75 +116,88 @@ async def get_video_info(data: VideoURL):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(data.url, download=False)
-            
-            if not info:
-                raise HTTPException(status_code=404, detail="Could not extract video information")
-
-            # Check if it's a playlist
-            if 'entries' in info:
-                app_logger.info(f"Playlist detected: {info.get('title')} with {len(list(info.get('entries', [])))} entries")
-                entries = []
-                for entry in info.get('entries', []):
-                    if entry:
-                        entries.append(PlaylistEntry(
-                            url=entry.get('url') or entry.get('webpage_url') or entry.get('id'),
-                            title=entry.get('title')
-                        ))
-                
-                return VideoMetadata(
-                    title=info.get('title') or "Playlist",
-                    formats=[],
-                    url=data.url,
-                    is_playlist=True,
-                    entries=entries
-                )
-
-            # Efficiently filter and deduplicate formats on the backend
-            processed_formats = []
-            seen_keys = set()
-            
-            raw_formats = info.get('formats', [])
-            
-            for f in raw_formats:
-                vcodec = f.get('vcodec', 'none')
-                acodec = f.get('acodec', 'none')
-                
-                if vcodec == 'none' and acodec == 'none':
-                    continue
-                
-                res = f.get('resolution') or (f"{f.get('width')}x{f.get('height')}" if f.get('width') else 'audio')
-                ext = f.get('ext', 'mp4')
-                is_audio_only = vcodec == 'none'
-                
-                key = (res, ext, is_audio_only)
-                
-                if key in seen_keys:
-                    continue
-                
-                seen_keys.add(key)
-                
-                processed_formats.append(FormatInfo(
-                    format_id=f.get('format_id'),
-                    ext=ext,
-                    resolution=f.get('resolution'),
-                    filesize=f.get('filesize') or f.get('filesize_approx'),
-                    vcodec=vcodec,
-                    acodec=acodec,
-                    format_note=f.get('format_note')
-                ))
-            
-            app_logger.info(f"Successfully fetched and optimized info for: {info.get('title')} ({len(processed_formats)} formats)")
-            return VideoMetadata(
-                title=info.get('title') or "Unknown Title",
-                duration=info.get('duration'),
-                thumbnail=info.get('thumbnail'),
-                formats=processed_formats,
-                url=data.url,
-                is_playlist=False
-            )
+            return process_info(info, data.url)
     except Exception as e:
-        app_logger.error(f"Error fetching info for {data.url}: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        app_logger.warning(f"Error fetching info with cookies for {data.url}: {str(e)}. Retrying without cookies...")
+        # Fallback: Try without cookies
+        try:
+            ydl_opts_no_cookies = get_ydl_opts(extra_opts={'extract_flat': 'in_playlist'})
+            ydl_opts_no_cookies.pop('cookiesfrombrowser', None)
+            ydl_opts_no_cookies.pop('cookiefile', None)
+            
+            with yt_dlp.YoutubeDL(ydl_opts_no_cookies) as ydl:
+                info = ydl.extract_info(data.url, download=False)
+                return process_info(info, data.url)
+        except Exception as e2:
+            app_logger.error(f"Error fetching info without cookies for {data.url}: {str(e2)}")
+            raise HTTPException(status_code=400, detail=str(e2))
+
+def process_info(info, url):
+    if not info:
+        raise HTTPException(status_code=404, detail="Could not extract video information")
+
+    # Check if it's a playlist
+    if 'entries' in info:
+        app_logger.info(f"Playlist detected: {info.get('title')} with {len(list(info.get('entries', [])))} entries")
+        entries = []
+        for entry in info.get('entries', []):
+            if entry:
+                entries.append(PlaylistEntry(
+                    url=entry.get('url') or entry.get('webpage_url') or entry.get('id'),
+                    title=entry.get('title')
+                ))
+        
+        return VideoMetadata(
+            title=info.get('title') or "Playlist",
+            formats=[],
+            url=url,
+            is_playlist=True,
+            entries=entries
+        )
+
+    # Efficiently filter and deduplicate formats on the backend
+    processed_formats = []
+    seen_keys = set()
+    
+    raw_formats = info.get('formats', [])
+    
+    for f in raw_formats:
+        vcodec = f.get('vcodec', 'none')
+        acodec = f.get('acodec', 'none')
+        
+        if vcodec == 'none' and acodec == 'none':
+            continue
+        
+        res = f.get('resolution') or (f"{f.get('width')}x{f.get('height')}" if f.get('width') else 'audio')
+        ext = f.get('ext', 'mp4')
+        is_audio_only = vcodec == 'none'
+        
+        key = (res, ext, is_audio_only)
+        
+        if key in seen_keys:
+            continue
+        
+        seen_keys.add(key)
+        
+        processed_formats.append(FormatInfo(
+            format_id=f.get('format_id'),
+            ext=ext,
+            resolution=f.get('resolution'),
+            filesize=f.get('filesize') or f.get('filesize_approx'),
+            vcodec=vcodec,
+            acodec=acodec,
+            format_note=f.get('format_note')
+        ))
+    
+    app_logger.info(f"Successfully fetched and optimized info for: {info.get('title')} ({len(processed_formats)} formats)")
+    return VideoMetadata(
+        title=info.get('title') or "Unknown Title",
+        duration=info.get('duration'),
+        thumbnail=info.get('thumbnail'),
+        formats=processed_formats,
+        url=url,
+        is_playlist=False
+    )
 
 def cleanup_file(path: str):
     if os.path.exists(path):

@@ -38,7 +38,7 @@ function App() {
   const [urlInput, setUrlInput] = useState('');
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [history, setHistory] = useState<DownloadHistoryEntry[]>([]);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const fetchingRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -502,6 +502,10 @@ function App() {
           </div>
         </div>
       )}
+      
+      <footer className={styles.footer}>
+        v1.0.1 • Build: 2026-04-29 18:19:40
+      </footer>
     </div>
   );
 }
