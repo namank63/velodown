@@ -31,7 +31,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DOWNLOAD_DIR = os.path.join(os.getcwd(), "temp_downloads")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "temp_downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 class VideoURL(BaseModel):
@@ -179,17 +180,14 @@ async def delete_download_history():
         raise HTTPException(status_code=500, detail="Could not clear history")
 
 # Mount frontend static files
-# In development, the dist folder might be one level up or in frontend/dist
-# We'll check both for robustness
-frontend_dist = os.path.join(os.path.dirname(os.getcwd()), "frontend", "dist")
-if not os.path.exists(frontend_dist):
-    frontend_dist = os.path.join(os.getcwd(), "frontend", "dist")
+# Look for frontend/dist relative to this file's location
+frontend_dist = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
 
 if os.path.exists(frontend_dist):
     app_logger.info(f"Serving frontend from {frontend_dist}")
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
 else:
-    app_logger.warning(f"Frontend dist directory not found. API is running, but UI will not be served.")
+    app_logger.warning(f"Frontend dist directory not found at {frontend_dist}. API is running, but UI will not be served.")
     @app.get("/")
     async def root():
         return {"message": "Video Downloader API is running. UI not found."}
