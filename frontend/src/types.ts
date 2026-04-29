@@ -24,6 +24,7 @@ export interface DownloadHistoryEntry {
     status: 'started' | 'completed' | 'failed';
     timestamp: string;
     file_path?: string;
+    thumbnail?: string;
 }
 
 export interface VideoItem {

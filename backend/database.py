@@ -21,13 +21,19 @@ def init_db():
             status TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             file_path TEXT,
-            visitor_id TEXT
+            visitor_id TEXT,
+            thumbnail TEXT
         )
     ''')
     
-    # Migration: Add visitor_id if it doesn't exist (for existing history.db)
+    # Migrations for existing history.db
     try:
         cursor.execute('ALTER TABLE downloads ADD COLUMN visitor_id TEXT')
+    except sqlite3.OperationalError:
+        pass # Already exists
+        
+    try:
+        cursor.execute('ALTER TABLE downloads ADD COLUMN thumbnail TEXT')
     except sqlite3.OperationalError:
         pass # Already exists
         
@@ -44,13 +50,13 @@ def add_download(job_id, url, visitor_id, title=None, format_id=None, status='st
     conn.commit()
     conn.close()
 
-def update_download_status(job_id, status, title=None, file_path=None):
+def update_download_status(job_id, status, title=None, file_path=None, thumbnail=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     if title and file_path:
         cursor.execute('''
-            UPDATE downloads SET status = ?, title = ?, file_path = ? WHERE id = ?
-        ''', (status, title, file_path, job_id))
+            UPDATE downloads SET status = ?, title = ?, file_path = ?, thumbnail = ? WHERE id = ?
+        ''', (status, title, file_path, thumbnail, job_id))
     else:
         cursor.execute('''
             UPDATE downloads SET status = ? WHERE id = ?
@@ -70,6 +76,13 @@ def clear_history(visitor_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('DELETE FROM downloads WHERE visitor_id = ?', (visitor_id,))
+    conn.commit()
+    conn.close()
+
+def delete_single_history(job_id, visitor_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM downloads WHERE id = ? AND visitor_id = ?', (job_id, visitor_id))
     conn.commit()
     conn.close()
 

@@ -156,6 +156,20 @@ function App() {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
+  const deleteHistoryItem = async (id: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/history/${id}`, { 
+        method: 'DELETE',
+        headers: { 'X-Visitor-Id': visitorId }
+      });
+      if (response.ok) {
+        setHistory(prev => prev.filter(item => item.id !== id));
+      }
+    } catch (err) {
+      console.error('Failed to delete history item', err);
+    }
+  };
+
   const clearHistory = async () => {
     if (!window.confirm('Are you sure you want to clear your download history?')) return;
     try {
@@ -361,15 +375,22 @@ function App() {
           <div className={styles.historyList}>
             {history.map((item) => (
               <div key={item.id} className={styles.historyItem}>
+                {item.thumbnail && (
+                  <img src={item.thumbnail} alt="" className={styles.historyThumbnail} />
+                )}
                 <div className={styles.historyMain}>
                   <div className={styles.historyTitle}>{item.title || 'Unknown Title'}</div>
-                  <div className={styles.historyUrl}>{item.url}</div>
+                  <div className={styles.urlContainer}>
+                    <div className={styles.historyUrl}>{item.url}</div>
+                    <button className={styles.copyButton} onClick={() => copyToClipboard(item.url)}>Copy</button>
+                  </div>
                 </div>
                 <div className={styles.historyMeta}>
                   <span className={`${styles.status} ${styles[`status_${item.status}`]}`}>
                     {item.status}
                   </span>
                   <span className={styles.historyTime}>{formatTime(item.timestamp)}</span>
+                  <button className={styles.historyDelete} onClick={() => deleteHistoryItem(item.id)}>✕</button>
                 </div>
               </div>
             ))}
