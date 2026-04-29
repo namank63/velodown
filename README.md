@@ -1,4 +1,4 @@
-# 🚀 Video Downloader
+# 🚀 OmniGrab
 
 A modern, fast, and feature-rich web application to download videos from YouTube, Vimeo, and 1000+ other sites. Built with FastAPI, React, and `yt-dlp`.
 
@@ -31,7 +31,25 @@ A modern, fast, and feature-rich web application to download videos from YouTube
 1. **Double-click `stop_app.bat`**: This will safely kill all background processes (Python and Ngrok).
 
 ### Manual Setup
-...
+
+1. **Backend Setup:**
+   ```bash
+   cd backend
+   python -m venv venv
+   source venv/Scripts/activate
+   pip install -r requirements.txt
+   python main.py
+   ```
+
+2. **Frontend Setup:**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+3. **Access the app:**
+   Open `http://localhost:5173` (Frontend dev server) or `http://localhost:8000` (Backend API).
 
 ## 📱 Mobile Access (ngrok)
 

@@ -1,4 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Moon, 
+  Sun, 
+  Download, 
+  X, 
+  Loader2, 
+  Music, 
+  Copy, 
+  Trash2, 
+  Video, 
+  Link as LinkIcon, 
+  History as HistoryIcon,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  FileVideo,
+  ExternalLink
+} from 'lucide-react';
 import styles from './App.module.css';
 import type { VideoMetadata, DownloadHistoryEntry, VideoItem } from './types';
 
@@ -157,6 +175,7 @@ function App() {
   };
 
   const deleteHistoryItem = async (id: string) => {
+    if (!window.confirm('Remove this item from history?')) return;
     try {
       const response = await fetch(`${API_BASE_URL}/api/history/${id}`, { 
         method: 'DELETE',
@@ -171,7 +190,7 @@ function App() {
   };
 
   const clearHistory = async () => {
-    if (!window.confirm('Are you sure you want to clear your download history?')) return;
+    if (!window.confirm('Are you sure you want to clear your entire download history?')) return;
     try {
       const response = await fetch(`${API_BASE_URL}/api/history`, { 
         method: 'DELETE',
@@ -183,6 +202,12 @@ function App() {
     } catch (err) {
       console.error('Failed to clear history', err);
     }
+  };
+
+  const copyAllHistoryLinks = () => {
+    const links = history.map(item => item.url).join('\n');
+    navigator.clipboard.writeText(links);
+    alert('All history links copied to clipboard!');
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -225,7 +250,6 @@ function App() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('URL copied to clipboard!');
   };
 
   const setTab = (videoId: string, tab: VideoItem['activeTab']) => {
@@ -236,17 +260,19 @@ function App() {
     <div className={styles.container}>
       <header className={styles.header}>
         <button className={styles.themeToggle} onClick={toggleTheme}>
-          {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+          {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          <span>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
         </button>
-        <h1>Video Downloader</h1>
-        <p>Paste links from YouTube, Vimeo, and more</p>
+        <h1>OmniGrab</h1>
+        <p>Seamlessly download media from across the web</p>
       </header>
 
-      <div className={styles.searchSection}>
+      <div className={`${styles.searchSection} glass`}>
+        <Search className={styles.searchIcon} size={20} />
         <input
           type="text"
           className={styles.input}
-          placeholder="Paste link here..."
+          placeholder="Paste link from YouTube, Vimeo, or Twitter..."
           value={urlInput}
           onChange={handleInputChange}
           onPaste={onPaste}
@@ -261,105 +287,168 @@ function App() {
 
       {videos.length > 1 && (
         <button className={`${styles.button} ${styles.downloadAll}`} onClick={handleDownloadAll}>
-          📥 Download All ({videos.length} videos)
+          <Download size={20} />
+          Download All ({videos.length})
         </button>
       )}
 
       <div className={styles.videoList}>
         {videos.map(video => (
-          <div key={video.id} className={styles.results}>
+          <div key={video.id} className={`${styles.results} glass`}>
             <div className={styles.videoHeader}>
               <div className={styles.urlContainer}>
+                <LinkIcon size={14} className={styles.linkIcon} />
                 <div className={styles.videoUrl}>{video.url}</div>
-                <button className={styles.copyButton} onClick={() => copyToClipboard(video.url)}>Copy</button>
+                <button className={styles.copyButton} onClick={() => copyToClipboard(video.url)}>
+                  <Copy size={12} />
+                </button>
               </div>
-              <button className={styles.removeButton} onClick={() => removeVideo(video.id)}>✕</button>
+              <button className={styles.removeButton} onClick={() => removeVideo(video.id)}>
+                <X size={20} />
+              </button>
             </div>
 
-            {video.loading && <div className={styles.loading}>Analyzing video...</div>}
-            {video.error && <div className={styles.error}>{video.error}</div>}
+            {video.loading && (
+              <div className={styles.loading}>
+                <Loader2 className={styles.spinner} size={24} />
+                <span>Analyzing metadata...</span>
+              </div>
+            )}
+            
+            {video.error && (
+              <div className={styles.error}>
+                <AlertCircle size={20} />
+                <span>{video.error}</span>
+              </div>
+            )}
 
             {video.metadata && (
               <>
-                <div className={styles.videoInfo}>
-                  {video.metadata.thumbnail && (
-                    <img src={video.metadata.thumbnail} alt="Thumbnail" className={styles.thumbnail} />
-                  )}
-                  <div className={styles.details}>
-                    <h2>{video.metadata.title}</h2>
-                    {video.metadata.duration && (
-                      <span className={styles.duration}>Duration: {formatDuration(video.metadata.duration)}</span>
-                    )}
-                    <div style={{marginTop: '1.5rem'}}>
-                       <button 
-                        className={styles.downloadBtn} 
-                        onClick={() => handleDownload(video)}
-                        disabled={video.downloading || !video.selectedFormatId}
+                {video.metadata.is_playlist ? (
+                  <div className={styles.playlistContainer}>
+                    <div className={styles.playlistInfo}>
+                      <HistoryIcon size={32} className={styles.playlistIcon} />
+                      <div className={styles.playlistDetails}>
+                        <h2>Playlist: {video.metadata.title}</h2>
+                        <p>{video.metadata.entries?.length || 0} videos found in this playlist</p>
+                      </div>
+                      <button 
+                        className={styles.addPlaylistBtn}
+                        onClick={() => {
+                          video.metadata?.entries?.forEach(entry => addVideo(entry.url));
+                          removeVideo(video.id);
+                        }}
                       >
-                        {video.downloading ? '⏳ Processing on Server...' : '📥 Download Selected'}
+                        <Download size={18} />
+                        Add All to Queue
                       </button>
-                      {video.downloading && (
-                        <div className={styles.processingText}>
-                          The server is downloading and merging high-quality streams. Please wait...
+                    </div>
+                    <div className={styles.playlistEntries}>
+                      {video.metadata.entries?.slice(0, 5).map((entry, i) => (
+                        <div key={i} className={styles.playlistEntry}>
+                          <span>{i + 1}. {entry.title || 'Unknown Title'}</span>
+                        </div>
+                      ))}
+                      {(video.metadata.entries?.length || 0) > 5 && (
+                        <div className={styles.playlistMore}>
+                          And {video.metadata.entries!.length - 5} more videos...
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
-
-                <div className={styles.tabs}>
-                  <button 
-                    className={`${styles.tab} ${video.activeTab === 'video' ? styles.tabActive : ''}`}
-                    onClick={() => setTab(video.id, 'video')}
-                  >
-                    Video
-                  </button>
-                  <button 
-                    className={`${styles.tab} ${video.activeTab === 'audio' ? styles.tabActive : ''}`}
-                    onClick={() => setTab(video.id, 'audio')}
-                  >
-                    Audio
-                  </button>
-                  <button 
-                    className={`${styles.tab} ${video.activeTab === 'video_only' ? styles.tabActive : ''}`}
-                    onClick={() => setTab(video.id, 'video_only')}
-                  >
-                    Only Video
-                  </button>
-                </div>
-
-                <div className={styles.formatGrid}>
-                  {video.metadata.formats
-                    .filter(f => {
-                      if (video.activeTab === 'audio') return f.vcodec === 'none';
-                      return f.vcodec !== 'none';
-                    })
-                    .sort((a, b) => {
-                      const resA = parseInt(a.resolution?.split('x')[0] || '0');
-                      const resB = parseInt(b.resolution?.split('x')[0] || '0');
-                      if (resB !== resA) return resB - resA;
-                      return (b.filesize || 0) - (a.filesize || 0);
-                    })
-                    // Deduplicate logic
-                    .filter((f, index, self) => 
-                      index === self.findIndex((t) => (
-                        t.resolution === f.resolution && t.ext === f.ext && (t.vcodec === 'none') === (f.vcodec === 'none')
-                      ))
-                    )
-                    .map((f) => (
-                    <div 
-                      key={f.format_id} 
-                      className={`${styles.formatCard} ${video.selectedFormatId === f.format_id ? styles.formatCardActive : ''}`}
-                      onClick={() => setVideos(prev => prev.map(v => v.id === video.id ? { ...v, selectedFormatId: f.format_id } : v))}
-                    >
-                      <span className={styles.ext}>{f.ext.toUpperCase()}</span>
-                      <span className={styles.res}>
-                        {f.vcodec === 'none' ? '🎵 Audio Only' : (f.resolution || 'Video')}
-                      </span>
-                      <span className={styles.size}>{formatSize(f.filesize)}</span>
+                ) : (
+                  <>
+                    <div className={styles.videoInfo}>
+                      {video.metadata.thumbnail && (
+                        <div className={styles.thumbnailWrapper}>
+                          <img src={video.metadata.thumbnail} alt="Thumbnail" className={styles.thumbnail} />
+                          {video.metadata.duration && (
+                            <span className={styles.durationBadge}>{formatDuration(video.metadata.duration)}</span>
+                          )}
+                        </div>
+                      )}
+                      <div className={styles.details}>
+                        <h2>{video.metadata.title}</h2>
+                        <div className={styles.actionRow}>
+                           <button 
+                            className={styles.downloadBtn} 
+                            onClick={() => handleDownload(video)}
+                            disabled={video.downloading || !video.selectedFormatId}
+                          >
+                            {video.downloading ? (
+                              <>
+                                <Loader2 className={styles.spinner} size={20} />
+                                <span>Processing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download size={20} />
+                                <span>Download High Quality</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {video.downloading && (
+                          <div className={styles.processingText}>
+                            <CheckCircle2 size={14} />
+                            The server is merging high-quality streams.
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
+
+                    <div className={styles.tabs}>
+                      <button 
+                        className={`${styles.tab} ${video.activeTab === 'video' ? styles.tabActive : ''}`}
+                        onClick={() => setTab(video.id, 'video')}
+                      >
+                        <Video size={16} />
+                        Video
+                      </button>
+                      <button 
+                        className={`${styles.tab} ${video.activeTab === 'audio' ? styles.tabActive : ''}`}
+                        onClick={() => setTab(video.id, 'audio')}
+                      >
+                        <Music size={16} />
+                        Audio
+                      </button>
+                      <button 
+                        className={`${styles.tab} ${video.activeTab === 'video_only' ? styles.tabActive : ''}`}
+                        onClick={() => setTab(video.id, 'video_only')}
+                      >
+                        <FileVideo size={16} />
+                        No Audio
+                      </button>
+                    </div>
+
+                    <div className={styles.formatGrid}>
+                      {video.metadata.formats
+                        .filter(f => {
+                          if (video.activeTab === 'audio') return f.vcodec === 'none';
+                          return f.vcodec !== 'none';
+                        })
+                        .sort((a, b) => {
+                          const resA = parseInt(a.resolution?.split('x')[0] || '0');
+                          const resB = parseInt(b.resolution?.split('x')[0] || '0');
+                          if (resB !== resA) return resB - resA;
+                          return (b.filesize || 0) - (a.filesize || 0);
+                        })
+                        .map((f) => (
+                        <div 
+                          key={f.format_id} 
+                          className={`${styles.formatCard} ${video.selectedFormatId === f.format_id ? styles.formatCardActive : ''}`}
+                          onClick={() => setVideos(prev => prev.map(v => v.id === video.id ? { ...v, selectedFormatId: f.format_id } : v))}
+                        >
+                          <span className={styles.ext}>{f.ext.toUpperCase()}</span>
+                          <span className={styles.res}>
+                            {f.vcodec === 'none' ? 'High Fidelity Audio' : (f.resolution || 'Video')}
+                          </span>
+                          <span className={styles.size}>{formatSize(f.filesize)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -369,20 +458,34 @@ function App() {
       {history.length > 0 && (
         <div className={styles.historySection}>
           <div className={styles.historyHeader}>
-            <h3>Recent Downloads</h3>
-            <button className={styles.clearButton} onClick={clearHistory}>Clear History</button>
+            <div className={styles.historyTitleRow}>
+              <HistoryIcon size={20} />
+              <h3>Recent Downloads</h3>
+            </div>
+            <div className={styles.historyActions}>
+              <button className={styles.copyAllButton} onClick={copyAllHistoryLinks}>
+                <Copy size={14} />
+                <span>Copy All Links</span>
+              </button>
+              <button className={styles.clearButton} onClick={clearHistory}>
+                <Trash2 size={14} />
+                <span>Clear All</span>
+              </button>
+            </div>
           </div>
           <div className={styles.historyList}>
             {history.map((item) => (
-              <div key={item.id} className={styles.historyItem}>
+              <div key={item.id} className={`${styles.historyItem} glass`}>
                 {item.thumbnail && (
                   <img src={item.thumbnail} alt="" className={styles.historyThumbnail} />
                 )}
                 <div className={styles.historyMain}>
                   <div className={styles.historyTitle}>{item.title || 'Unknown Title'}</div>
-                  <div className={styles.urlContainer}>
-                    <div className={styles.historyUrl}>{item.url}</div>
-                    <button className={styles.copyButton} onClick={() => copyToClipboard(item.url)}>Copy</button>
+                  <div className={styles.historyUrlRow}>
+                    <span className={styles.historyUrl}>{item.url}</span>
+                    <a href={item.url} target="_blank" rel="noreferrer" className={styles.externalLink}>
+                      <ExternalLink size={12} />
+                    </a>
                   </div>
                 </div>
                 <div className={styles.historyMeta}>
@@ -390,7 +493,9 @@ function App() {
                     {item.status}
                   </span>
                   <span className={styles.historyTime}>{formatTime(item.timestamp)}</span>
-                  <button className={styles.historyDelete} onClick={() => deleteHistoryItem(item.id)}>✕</button>
+                  <button className={styles.historyDelete} onClick={() => deleteHistoryItem(item.id)}>
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))}

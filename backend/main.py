@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     yield
     app_logger.info("Application shutting down...")
 
-app = FastAPI(title="Video Downloader API", lifespan=lifespan)
+app = FastAPI(title="OmniGrab API", lifespan=lifespan)
 
 # Enable CORS (primarily for development)
 app.add_middleware(
@@ -47,12 +47,18 @@ class FormatInfo(BaseModel):
     acodec: Optional[str] = None
     format_note: Optional[str] = None
 
+class PlaylistEntry(BaseModel):
+    url: str
+    title: Optional[str] = None
+
 class VideoMetadata(BaseModel):
     title: str
     duration: Optional[int] = None
     thumbnail: Optional[str] = None
     formats: List[FormatInfo]
     url: str
+    is_playlist: bool = False
+    entries: Optional[List[PlaylistEntry]] = None
 
 @app.get("/api/health")
 async def health():
@@ -61,35 +67,82 @@ async def health():
 @app.post("/api/info", response_model=VideoMetadata)
 async def get_video_info(data: VideoURL):
     app_logger.info(f"Fetching info for URL: {data.url}")
+    # Optimize ydl_opts for speed
     ydl_opts = {
         'logger': yt_logger,
         'no_warnings': True,
+        'quiet': True,
+        'extract_flat': 'in_playlist',
     }
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(data.url, download=False)
             
-            formats = []
-            for f in info.get('formats', []):
-                if f.get('vcodec') != 'none' or f.get('acodec') != 'none':
-                    formats.append(FormatInfo(
-                        format_id=f.get('format_id'),
-                        ext=f.get('ext'),
-                        resolution=f.get('resolution'),
-                        filesize=f.get('filesize') or f.get('filesize_approx'),
-                        vcodec=f.get('vcodec'),
-                        acodec=f.get('acodec'),
-                        format_note=f.get('format_note')
-                    ))
+            if not info:
+                raise HTTPException(status_code=404, detail="Could not extract video information")
+
+            # Check if it's a playlist
+            if 'entries' in info:
+                app_logger.info(f"Playlist detected: {info.get('title')} with {len(list(info.get('entries', [])))} entries")
+                entries = []
+                for entry in info.get('entries', []):
+                    if entry:
+                        entries.append(PlaylistEntry(
+                            url=entry.get('url') or entry.get('webpage_url') or entry.get('id'),
+                            title=entry.get('title')
+                        ))
+                
+                return VideoMetadata(
+                    title=info.get('title') or "Playlist",
+                    formats=[],
+                    url=data.url,
+                    is_playlist=True,
+                    entries=entries
+                )
+
+            # Efficiently filter and deduplicate formats on the backend
+            processed_formats = []
+            seen_keys = set()
             
-            app_logger.info(f"Successfully fetched info for: {info.get('title')}")
+            raw_formats = info.get('formats', [])
+            
+            for f in raw_formats:
+                vcodec = f.get('vcodec', 'none')
+                acodec = f.get('acodec', 'none')
+                
+                if vcodec == 'none' and acodec == 'none':
+                    continue
+                
+                res = f.get('resolution') or (f"{f.get('width')}x{f.get('height')}" if f.get('width') else 'audio')
+                ext = f.get('ext', 'mp4')
+                is_audio_only = vcodec == 'none'
+                
+                key = (res, ext, is_audio_only)
+                
+                if key in seen_keys:
+                    continue
+                
+                seen_keys.add(key)
+                
+                processed_formats.append(FormatInfo(
+                    format_id=f.get('format_id'),
+                    ext=ext,
+                    resolution=f.get('resolution'),
+                    filesize=f.get('filesize') or f.get('filesize_approx'),
+                    vcodec=vcodec,
+                    acodec=acodec,
+                    format_note=f.get('format_note')
+                ))
+            
+            app_logger.info(f"Successfully fetched and optimized info for: {info.get('title')} ({len(processed_formats)} formats)")
             return VideoMetadata(
-                title=info.get('title'),
+                title=info.get('title') or "Unknown Title",
                 duration=info.get('duration'),
                 thumbnail=info.get('thumbnail'),
-                formats=formats,
-                url=data.url
+                formats=processed_formats,
+                url=data.url,
+                is_playlist=False
             )
     except Exception as e:
         app_logger.error(f"Error fetching info for {data.url}: {str(e)}")
@@ -207,7 +260,7 @@ else:
     app_logger.warning(f"Frontend dist directory not found at {frontend_dist}. API is running, but UI will not be served.")
     @app.get("/")
     async def root():
-        return {"message": "Video Downloader API is running. UI not found."}
+        return {"message": "OmniGrab API is running. UI not found."}
 
 if __name__ == "__main__":
     import uvicorn

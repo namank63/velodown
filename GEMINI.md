@@ -1,53 +1,50 @@
-# Video Downloader - Technical Documentation
+# OmniGrab - Technical Documentation & Agent Mandates
 
-This document provides architectural details, coding conventions, and project structure for AI agents and developers working on the Video Downloader project.
+This document provides foundational architecture, coding conventions, and operational mandates for OmniGrab. **All agents must strictly adhere to these guidelines.**
 
-## Project Architecture
+## 📋 Task Management Mandate
 
-The project is a full-stack application for downloading videos from various web platforms using `yt-dlp`.
+**Whenever the user mentions "work", "do task", "pending items", or anything related to current work/tasks:**
+1.  Locate the `To-Do.txt` file in the project root.
+2.  Identify tasks that start with a number followed by a period (e.g., `1.`), a closing parenthesis (e.g., `1)`), or a dash (e.g., `1-`).
+3.  Ignore any lines or sections that do not follow this numbering convention.
+4.  Propose the next logical task from this list and wait for user confirmation before starting.
 
-- **Frontend:** React (TypeScript) with Vite. Uses CSS Modules for styling.
-- **Backend:** FastAPI (Python). Orchestrates `yt-dlp` for metadata extraction and media downloading.
-- **Database:** SQLite for persistent download history.
-- **Logging:** Python's `logging` module with a rotating file handler and custom integration for `yt-dlp`.
-- **Media Engine:** `yt-dlp` is used for all media interaction.
+## 🏗️ Project Architecture
 
-## Core Workflows
+OmniGrab is a high-performance media acquisition suite leveraging `yt-dlp`.
 
-1.  **Metadata Fetching:** Frontend sends a URL to `/api/info`. Backend uses `yt-dlp` in non-download mode to extract formats and metadata.
-2.  **Downloading:** Frontend sends a URL and a specific `format_id` to `/api/download`. Backend creates a unique job ID, downloads the media using `yt-dlp`, and serves the resulting file as a `FileResponse`.
-3.  **History:** Every download attempt is recorded in `backend/history.db`.
-4.  **Static Serving:** In production, the backend serves the built React frontend (`frontend/dist`) from the root `/` path.
+### High-Level Flow
+1.  **Ingress:** Frontend accepts URLs (manual input or paste).
+2.  **Analysis (`/api/info`):** FastAPI invokes `yt-dlp --dump-json` to extract streams, metadata, and thumbnails.
+3.  **Selection:** Frontend filters and presents streams (Video, Audio, Video-only) with auto-selection of the highest quality.
+4.  **Acquisition (`/api/download`):** Backend spawns an optimized `yt-dlp` process to download and merge streams (FFmpeg-based).
+5.  **Egress:** Completed files are streamed to the client; server-side copies are purged post-delivery.
+6.  **Persistence:** SQLite tracks successful/failed downloads for session history.
 
-## Coding Conventions
+## 🎨 UI/UX Standards
 
-### Frontend
-- **Type Safety:** Always define interfaces in `src/types.ts`.
-- **Styling:** Use CSS Modules (`*.module.css`) to prevent global namespace pollution.
-- **Components:** Functional components with Hooks.
-- **Dark Mode:** Driven by `data-theme` attribute on the `<html>` or `<body>` element and CSS variables.
+- **Theme:** Adaptive Dark/Light modes via `data-theme` and CSS variables.
+- **Glassmorphism:** Use the `.glass` utility class for elevated components (cards, search bars).
+- **Icons:** Use **Lucide React exclusively**. Avoid emojis or stock icons.
+- **Background:** Mesh gradient radial patterns (defined in `global.css`).
+- **Typography:** Inter (Sans-serif) with heavy weights for headings.
 
-### Backend
-- **Type Hinting:** Use Pydantic models for request/response validation.
-- **Error Handling:** Use `HTTPException` for API errors.
-- **Logging:** Use `app_logger` from `logger.py`. Do not use `print()`.
-- **Async:** Use `async def` for API endpoints. Background tasks (like cleanup) should use `BackgroundTasks`.
+## 💻 Backend Conventions
 
-## Project Structure
+- **Concurrency:** Asynchronous endpoints (`async def`) for non-blocking I/O.
+- **Safety:** Strict Pydantic models for request validation.
+- **Engine:** `yt-dlp` interaction is isolated; no direct shell execution without sanitization.
+- **Storage:** Temporary files live in `backend/temp_downloads/` and are strictly managed.
 
-- `backend/`: Python FastAPI source code.
-  - `main.py`: Main application and API routes.
-  - `logger.py`: Logging configuration.
-  - `database.py`: SQLite interaction.
-  - `history.db`: SQLite database file (gitignored).
-  - `logs/`: Application logs (gitignored).
-  - `temp_downloads/`: Temporary storage for media before serving (gitignored).
-- `frontend/`: React Vite source code.
-  - `src/App.tsx`: Main UI logic.
-  - `src/types.ts`: TypeScript interfaces.
-  - `dist/`: Built production files (gitignored).
+## 🗃️ Project Structure
 
-## Maintenance Tasks
-
-- **Cleanup:** The backend automatically deletes downloaded files after they are served via a `BackgroundTasks` hook.
-- **Log Rotation:** `app.log` is capped at 10MB and keeps 5 backups.
+- `backend/`: FastAPI source.
+  - `main.py`: Primary API surface.
+  - `database.py`: SQLite/SQLAlchemy layer.
+  - `logger.py`: Centralized logging.
+- `frontend/`: React + Vite source.
+  - `src/App.tsx`: Core UI orchestrator.
+  - `src/App.module.css`: Scoped component styling.
+  - `src/global.css`: Global variables and mesh background.
+- `To-Do.txt`: Source of truth for active development tasks.

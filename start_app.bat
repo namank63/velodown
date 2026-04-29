@@ -2,7 +2,7 @@
 SETLOCAL EnableDelayedExpansion
 
 echo ========================================
-echo   Video Downloader - Starting Services
+echo   OmniGrab - Starting Services
 echo ========================================
 
 :: 1. Navigate to the project root

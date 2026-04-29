@@ -8,12 +8,19 @@ export interface FormatInfo {
     format_note?: string;
 }
 
+export interface PlaylistEntry {
+    url: string;
+    title?: string;
+}
+
 export interface VideoMetadata {
     title: string;
     duration?: number;
     thumbnail?: string;
     formats: FormatInfo[];
     url: string;
+    is_playlist?: boolean;
+    entries?: PlaylistEntry[];
 }
 
 export interface DownloadHistoryEntry {

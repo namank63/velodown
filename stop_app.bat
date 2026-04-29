@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo   Video Downloader - Stopping Services
+echo   OmniGrab - Stopping Services
 echo ========================================
 
 echo Stopping Python Backend...
