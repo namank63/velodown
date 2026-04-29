@@ -1,3 +1,0 @@
-1) Now the download selected is too big, make it medium and the green is not looking good make some colour change to some other kind of green.
-2) When you're opening a sub box for a video you're also showing the video url right, add a copy button there to copy to clipboard
-3) Let's filter out the options add 3 tabs - Video (Video + Audio), Audio (only Audio) and Only Video (Video but no audio)

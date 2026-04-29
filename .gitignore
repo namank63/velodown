@@ -21,3 +21,6 @@ frontend/.eslintcache
 .idea/
 .DS_Store
 *.swp
+
+# Project Files
+To-Do.txt
