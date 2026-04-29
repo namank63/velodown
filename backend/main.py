@@ -33,7 +33,25 @@ app.add_middleware(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "temp_downloads")
+COOKIES_FILE = os.path.join(BASE_DIR, "cookies.txt")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+def get_ydl_opts(download=False, extra_opts=None):
+    opts = {
+        'logger': yt_logger,
+        'no_warnings': True,
+        'quiet': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    }
+    
+    if os.path.exists(COOKIES_FILE):
+        app_logger.info(f"Using cookies from {COOKIES_FILE}")
+        opts['cookiefile'] = COOKIES_FILE
+    
+    if extra_opts:
+        opts.update(extra_opts)
+        
+    return opts
 
 class VideoURL(BaseModel):
     url: str
@@ -67,13 +85,8 @@ async def health():
 @app.post("/api/info", response_model=VideoMetadata)
 async def get_video_info(data: VideoURL):
     app_logger.info(f"Fetching info for URL: {data.url}")
-    # Optimize ydl_opts for speed
-    ydl_opts = {
-        'logger': yt_logger,
-        'no_warnings': True,
-        'quiet': True,
-        'extract_flat': 'in_playlist',
-    }
+    
+    ydl_opts = get_ydl_opts(extra_opts={'extract_flat': 'in_playlist'})
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -176,13 +189,11 @@ async def download_video(
     
     output_template = os.path.join(job_dir, '%(title)s.%(ext)s')
     
-    ydl_opts = {
+    ydl_opts = get_ydl_opts(download=True, extra_opts={
         'format': format_id if no_audio else f"{format_id}+bestaudio/best",
         'outtmpl': output_template,
-        'logger': yt_logger,
-        'no_warnings': True,
         'merge_output_format': 'mp4',
-    }
+    })
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
