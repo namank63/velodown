@@ -41,12 +41,22 @@ def get_ydl_opts(download=False, extra_opts=None):
         'logger': yt_logger,
         'no_warnings': True,
         'quiet': True,
+        # A more specific User-Agent that matches what yt-dlp might expect for certain extractors
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'nocheckcertificate': True,
+        'ignoreerrors': False,
+        'logtostderr': False,
     }
     
     if os.path.exists(COOKIES_FILE):
-        app_logger.info(f"Using cookies from {COOKIES_FILE}")
+        app_logger.info(f"Using cookies from file: {COOKIES_FILE}")
         opts['cookiefile'] = COOKIES_FILE
+    else:
+        # Since the user is on Windows, try to pull cookies from local browsers as a fallback
+        app_logger.info("cookies.txt not found. Attempting to pull cookies from local browser (Chrome/Edge/Firefox)...")
+        # We try to use cookies from common browsers. yt-dlp handles the existence check internally.
+        # This is very effective for local Windows setups.
+        opts['cookiesfrombrowser'] = ('chrome', 'edge', 'firefox', 'brave', 'vivaldi')
     
     if extra_opts:
         opts.update(extra_opts)
