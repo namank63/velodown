@@ -2,8 +2,9 @@ import os
 import uuid
 import shutil
 import asyncio
+from datetime import datetime
 from typing import List, Optional, Annotated
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Header
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -108,6 +109,30 @@ class VideoMetadata(BaseModel):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+@app.post("/api/cookies")
+async def upload_cookies(file: UploadFile = File(...)):
+    if not file.filename.endswith('.txt'):
+        raise HTTPException(status_code=400, detail="Only .txt files are allowed")
+    
+    try:
+        content = await file.read()
+        with open(COOKIES_FILE, "wb") as f:
+            f.write(content)
+        app_logger.info(f"Cookies updated via API. Path: {COOKIES_FILE}")
+        return {"message": "Cookies updated successfully"}
+    except Exception as e:
+        app_logger.error(f"Error uploading cookies: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save cookies: {str(e)}")
+
+@app.get("/api/cookies/status")
+async def get_cookies_status():
+    exists = os.path.exists(COOKIES_FILE)
+    mtime = os.path.getmtime(COOKIES_FILE) if exists else None
+    return {
+        "exists": exists,
+        "last_updated": datetime.fromtimestamp(mtime).isoformat() if mtime else None
+    }
 
 @app.post("/api/info", response_model=VideoMetadata)
 async def get_video_info(data: VideoURL):

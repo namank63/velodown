@@ -15,7 +15,9 @@ import {
   CheckCircle2,
   AlertCircle,
   FileVideo,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck,
+  Upload
 } from 'lucide-react';
 import styles from './App.module.css';
 import type { VideoMetadata, DownloadHistoryEntry, VideoItem } from './types';
@@ -33,6 +35,87 @@ const getVisitorId = () => {
 };
 
 const visitorId = getVisitorId();
+
+const CookieManager = () => {
+  const [status, setStatus] = useState<{exists: boolean, last_updated: string | null} | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/cookies/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch cookie status', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchStatus();
+  }, []);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/cookies`, {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        alert('Cookies updated successfully!');
+        fetchStatus();
+      } else {
+        const err = await res.json();
+        alert(`Upload failed: ${err.detail}`);
+      }
+    } catch (e) {
+      alert('Upload failed due to a network error');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className={`${styles.cookieManager} glass`}>
+      <div className={styles.cookieHeader}>
+        <ShieldCheck size={18} className={status?.exists ? styles.successIcon : styles.warningIcon} />
+        <span>Authentication Cookies: <strong>{status?.exists ? 'Active' : 'Missing'}</strong></span>
+      </div>
+      <div className={styles.cookieActions}>
+        <input 
+          type="file" 
+          accept=".txt" 
+          ref={fileInputRef} 
+          style={{ display: 'none' }} 
+          onChange={handleUpload} 
+        />
+        <button 
+          className={styles.uploadButton} 
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? <Loader2 className={styles.spin} size={14} /> : <Upload size={14} />}
+          <span>{status?.exists ? 'Update cookies.txt' : 'Upload cookies.txt'}</span>
+        </button>
+      </div>
+      {status?.last_updated && (
+        <div className={styles.lastUpdated}>
+          Last updated: {new Date(status.last_updated).toLocaleString()}
+        </div>
+      )}
+    </div>
+  );
+};
 
 function App() {
   const [urlInput, setUrlInput] = useState('');
@@ -284,6 +367,8 @@ function App() {
           }}
         />
       </div>
+
+      <CookieManager />
 
       {videos.length > 1 && (
         <button className={`${styles.button} ${styles.downloadAll}`} onClick={handleDownloadAll}>

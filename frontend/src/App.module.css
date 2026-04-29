@@ -737,3 +737,63 @@
   font-weight: 500;
   opacity: 0.6;
 }
+
+.cookieManager {
+  padding: 1rem 1.5rem;
+  border-radius: 16px;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid var(--border-color);
+}
+
+.cookieHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  color: var(--text-color);
+}
+
+.cookieActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.uploadButton {
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.uploadButton:hover:not(:disabled) {
+  background: var(--border-color);
+}
+
+.uploadButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lastUpdated {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.successIcon { color: #10b981; }
+.warningIcon { color: #f59e0b; }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
